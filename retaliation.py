@@ -79,6 +79,7 @@ import re
 import json
 import urllib2
 import base64
+import os
 
 import usb.core
 import usb.util
@@ -93,6 +94,14 @@ import usb.util
 # is milli-seconds. The number after "fire" denotes the number of rockets
 # to shoot.
 #
+ALIAS = {
+    "will.external" : "will",
+    "will"          : "will",
+    "tom_personal"  : "tom",
+    "tom"           : "tom",
+    "chris"         : "chris"
+}
+
 COMMAND_SETS = {
     "will" : (
         ("zero", 0), # Zero/Park to know point (bottom-left)
@@ -264,16 +273,11 @@ def run_command_set(commands):
 
 
 def jenkins_target_user(user):
-    match = False
-    # Not efficient but our user list is probably less than 1k.
     # Do a case insenstive search for convenience.
-    for key in COMMAND_SETS:
-        if key.lower() == user.lower():
+    if ALIAS.get(user.lower()) != None:
             # We have a command set that targets our user so got for it!
-            run_command_set(COMMAND_SETS[key])
-            match = True
-            break
-    if not match:
+            run_command_set(COMMAND_SETS[ALIAS.get(user.lower())])
+    else:
         print "WARNING: No target command set defined for user %s" % user
 
 
@@ -311,6 +315,14 @@ def jenkins_wait_for_event():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('', JENKINS_NOTIFICATION_UDP_PORT))
 
+    #In Ubuntu/Mint you need to install mplayer and chmod u+x speech.sh
+    speech = os.path.dirname(os.path.realpath(__file__)) + "/speech.sh "
+    volume = '10 ' # up to 50
+    voice = 'en ' #Google's API is not documented however some local codes (i.e. en_GB) seem to work just fine.
+    message = " you broke the build it's time for retaliation"
+    #change to True if you want to hear the voice!
+    skynet_voice = False
+
     while True:
         data, addr = sock.recvfrom(8 * 1024)
         try:
@@ -321,9 +333,12 @@ def jenkins_wait_for_event():
                 target = jenkins_get_responsible_user(notification_data["name"])
                 if target == None:
                     print "WARNING: Could not identify the user who broke the build!"
-                    continue
-
+                    continue                
                 print "Build Failed! Targeting user: " + target
+                #printing is nice but an Skynet voice is more menacing!
+                if skynet_voice:
+                    #TODO: change this to Popen to do it async.
+                    os.system(speech + volume + voice + target + message)
                 jenkins_target_user(target)
         except:
             pass
